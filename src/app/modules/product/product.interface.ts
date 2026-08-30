@@ -14,6 +14,7 @@ export interface IProduct {
   lastStockUpdatedAt?: Date;
   createdBy?: Types.ObjectId;
   lastUpdatedBy?: Types.ObjectId;
+  lastAddedStock?: number;
   lastUpdatedAt?: Date;
   restockCount: number;
   isBestSelling?: boolean;
