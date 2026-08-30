@@ -118,7 +118,11 @@ const productPurchaseSchema = new Schema<IProductPurchase>(
       ref: "User",
       required: true,
     },
-
+    updatedBy: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
     isDeleted: {
       type: Boolean,
       default: false,

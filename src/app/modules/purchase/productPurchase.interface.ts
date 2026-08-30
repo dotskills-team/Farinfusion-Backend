@@ -32,9 +32,9 @@ export interface IProductPurchase {
   supplierName: string;
   supplierPhone?: string;
   supplierAddress?: string;
-    paidAmount?: number;
+  paidAmount?: number;
   dueAmount?: number;
-  
+
   paymentType?: PaymentType;
   paymentMethod?: string;
 
@@ -55,6 +55,6 @@ export interface IProductPurchase {
   notes?: string;
 
   createdBy: Types.ObjectId;
-
+  updatedBy: Types.ObjectId;
   isDeleted: boolean;
 }

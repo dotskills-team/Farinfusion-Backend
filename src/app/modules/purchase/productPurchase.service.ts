@@ -162,7 +162,8 @@ const getAllPurchases = async (query: Record<string, string>) => {
   const queryBuilder = new QueryBuilder(
     ProductPurchase.find({ isDeleted: false })
       .populate("products.product")
-      .populate("createdBy", "name email"),
+      .populate("createdBy", "name email")
+      .populate("updatedBy", "name email"),
     query,
   );
 
@@ -187,7 +188,8 @@ const getAllPurchases = async (query: Record<string, string>) => {
 const getSinglePurchase = async (id: string) => {
   const purchase = await ProductPurchase.findById(id)
     .populate("products.product")
-    .populate("createdBy", "name email");
+    .populate("createdBy", "name email")
+    .populate("updatedBy", "name email");
 
   if (!purchase) {
     throw new AppError(httpStatus.NOT_FOUND, "Purchase not found");
@@ -199,6 +201,8 @@ const getSinglePurchase = async (id: string) => {
 const updatePurchase = async (
   id: string,
   payload: Partial<IProductPurchase>,
+  user: JwtPayload,
+
 ) => {
   const session = await mongoose.startSession();
 
@@ -211,7 +215,10 @@ const updatePurchase = async (
       throw new AppError(httpStatus.NOT_FOUND, "Purchase not found");
     }
 
-    if (payload.products?.length) {
+    // if (payload.products?.length) {
+    // changed this condition 
+
+    if ((payload.products !== undefined)) {
       // reverse old stock
       for (const oldItem of purchase.products) {
         const product = await Product.findById(oldItem.product).session(
@@ -256,7 +263,6 @@ const updatePurchase = async (
         product.totalAddedStock =
           (product.totalAddedStock || 0) + item.quantity;
         product.buyingPrice = item.buyingPrice;
-
         await product.save({ session });
         await onProductStockIncreased(product._id, session);
       }
@@ -270,6 +276,8 @@ const updatePurchase = async (
       payload.paymentStatus = paymentData.paymentStatus;
     }
 
+    payload.updatedBy = user.userId 
+
     Object.assign(purchase, payload);
 
     await purchase.save({ session });
@@ -279,7 +287,8 @@ const updatePurchase = async (
 
     return await ProductPurchase.findById(id)
       .populate("products.product")
-      .populate("createdBy", "name email");
+      .populate("createdBy", "name email")
+      .populate("updatedBy", "name email");
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
@@ -293,6 +302,7 @@ const updatePurchaseStatus = async (
     purchaseStatus?: PurchaseStatus;
     paymentStatus?: PaymentStatus;
   },
+  user: JwtPayload,
 ) => {
   const purchase = await ProductPurchase.findById(id);
 
@@ -308,11 +318,14 @@ const updatePurchaseStatus = async (
     purchase.paymentStatus = payload.paymentStatus;
   }
 
+  purchase.updatedBy = user.userId;
+
   await purchase.save();
 
   return await ProductPurchase.findById(id)
     .populate("products.product")
-    .populate("createdBy", "name email");
+    .populate("createdBy", "name email")
+    .populate("updatedBy", "name email")
 };
 
 const getPurchaseStats = async () => {

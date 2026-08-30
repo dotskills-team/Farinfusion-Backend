@@ -143,9 +143,11 @@ const updateProduct = async (
         throw new AppError(httpStatus.BAD_REQUEST, "Stock cannot be negative");
       }
 
+
       product.totalAddedStock = newTotalAddedStock;
       product.availableStock = newAvailableStock;
 
+      product.lastAddedStock = stockChange;       
       product.lastStockUpdatedBy = new mongoose.Types.ObjectId(user.userId);
       product.lastStockUpdatedAt = new Date();
 
@@ -473,10 +475,6 @@ const getAllProducts = async (query: Record<string, string>) => {
 
     const sale = salesMap.get(plain._id.toString());
     const totalSold = sale?.totalSold || 0;
-
-    const calculatedStock = (plain.totalAddedStock || 0) - totalSold;
-
-    const availableStock = Math.max(calculatedStock, 0);
 
     return {
       ...plain,

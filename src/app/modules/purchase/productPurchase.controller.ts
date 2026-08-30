@@ -51,6 +51,7 @@ const updatePurchaseStatus = catchAsync(async (req: Request, res: Response) => {
   const result = await ProductPurchaseServices.updatePurchaseStatus(
     id,
     req.body,
+    req.user,
   );
 
   sendResponse(res, {
@@ -76,6 +77,7 @@ const updatePurchase = catchAsync(async (req: Request, res: Response) => {
   const result = await ProductPurchaseServices.updatePurchase(
     req.params.id as string,
     req.body,
+    req.user,
   );
 
   sendResponse(res, {
