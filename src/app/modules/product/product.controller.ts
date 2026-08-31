@@ -237,6 +237,28 @@ const updateProductTrash = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getRankedLowStockProducts = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const query = req.query;
+    const result = await CategoryServices.getRankedLowStockProducts(
+      query as Record<string, string>,
+    );
+
+    sendResponse(res, {
+      success: true,
+      statusCode: httpStatus.OK,
+      message: "Ranked Low Stock Products Retrieved Successfully",
+      data: {
+        hot: result.data.hot,
+        medium: result.data.medium,
+        normal: result.data.normal,
+        meta: result.meta,
+        stats: result.stats,
+      },
+    });
+  },
+);
+
 export const ProductControllers = {
   createProduct,
   getSingleProduct,
@@ -247,4 +269,5 @@ export const ProductControllers = {
   toggleFeatured,
   assignMissingBarcodes,
   updateProductTrash,
+  getRankedLowStockProducts
 };

@@ -147,7 +147,7 @@ const updateProduct = async (
       product.totalAddedStock = newTotalAddedStock;
       product.availableStock = newAvailableStock;
 
-      product.lastAddedStock = stockChange;       
+      product.lastAddedStock = stockChange;
       product.lastStockUpdatedBy = new mongoose.Types.ObjectId(user.userId);
       product.lastStockUpdatedAt = new Date();
 
@@ -559,6 +559,143 @@ const getAllTrashProducts = async (query: Record<string, string>) => {
   };
 };
 
+// Add this in product.service.ts
+
+type ProductRankCategory = "HOT" | "MEDIUM" | "NORMAL";
+
+const paginateArray = (arr: any[], page: number, limit: number) => {
+  const skip = (page - 1) * limit;
+  const total = arr.length;
+
+  return {
+    data: arr.slice(skip, skip + limit),
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit) || 1,
+    },
+  };
+};
+
+const getRankedLowStockProducts = async (query: Record<string, string>) => {
+  // 1. Sales ranking source (same basis as dashboard topProducts)
+  const salesAgg = await Order.aggregate([
+    {
+      $match: {
+        orderStatus: "COMPLETED",
+        deliveryStatus: "DELIVERED",
+        isDeleted: false,
+        isPublished: true,
+      },
+    },
+    { $unwind: "$products" },
+    {
+      $group: {
+        _id: "$products.product",
+        totalSoldInPeriod: { $sum: "$products.quantity" },
+      },
+    },
+    { $sort: { totalSoldInPeriod: -1 } },
+  ]);
+
+  // 2. Rank -> category map
+  const rankedMap = new Map<
+    string,
+    { rank: number; category: ProductRankCategory; totalSoldInPeriod: number }
+  >();
+
+  salesAgg.forEach((item, index) => {
+    const rank = index + 1;
+    const category: ProductRankCategory =
+      rank <= 10 ? "HOT" : rank <= 21 ? "MEDIUM" : "NORMAL";
+
+    rankedMap.set(item._id.toString(), {
+      rank,
+      category,
+      totalSoldInPeriod: item.totalSoldInPeriod,
+    });
+  });
+
+  // 3. Base product query: only low/out of stock
+  const productQuery: any = {
+    isDeleted: false,
+    availableStock: { $lte: 5 },
+  };
+
+  // 4. Search support (same fields as getAllProducts)
+  const searchTerm = query.searchTerm;
+  if (searchTerm) {
+    productQuery.$or = productSearchableFields.map((field) => ({
+      [field]: { $regex: searchTerm, $options: "i" },
+    }));
+  }
+
+  const lowStockProducts = await Product.find(productQuery)
+    .populate("category", "title slug")
+    .populate("brand", "title slug");
+
+  // 5. Attach rank/category info
+  const allData = lowStockProducts.map((product) => {
+    const plain = product.toObject();
+    const ranked = rankedMap.get(plain._id.toString());
+
+    return {
+      ...plain,
+      rank: ranked?.rank ?? null,
+      productCategory: ranked?.category ?? ("NORMAL" as ProductRankCategory),
+      totalSoldInPeriod: ranked?.totalSoldInPeriod ?? 0,
+    };
+  });
+
+  // 6. Split by category (rank-sorted for hot/medium, default order for normal)
+  const hotAll = allData
+    .filter((p) => p.productCategory === "HOT")
+    .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+
+  const mediumAll = allData
+    .filter((p) => p.productCategory === "MEDIUM")
+    .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+
+  const normalAll = allData.filter((p) => p.productCategory === "NORMAL");
+
+  // 7. Independent pagination per category (each accepts its own page/limit, falls back to shared)
+  const hotPage = Number(query.hotPage || query.page) || 1;
+  const hotLimit = Number(query.hotLimit || query.limit) || 10;
+
+  const mediumPage = Number(query.mediumPage || query.page) || 1;
+  const mediumLimit = Number(query.mediumLimit || query.limit) || 10;
+
+  const normalPage = Number(query.normalPage || query.page) || 1;
+  const normalLimit = Number(query.normalLimit || query.limit) || 10;
+
+  const hotPaginated = paginateArray(hotAll, hotPage, hotLimit);
+  const mediumPaginated = paginateArray(mediumAll, mediumPage, mediumLimit);
+  const normalPaginated = paginateArray(normalAll, normalPage, normalLimit);
+
+  // 8. Stats (calculated on FULL data set, not the paginated slices)
+  const stats = {
+    totalStockOut: allData.length,
+    hotStockOut: hotAll.length,
+    mediumStockOut: mediumAll.length,
+    normalStockOut: normalAll.length,
+  };
+
+  return {
+    data: {
+      hot: hotPaginated.data,
+      medium: mediumPaginated.data,
+      normal: normalPaginated.data,
+    },
+    meta: {
+      hot: hotPaginated.meta,
+      medium: mediumPaginated.meta,
+      normal: normalPaginated.meta,
+    },
+    stats,
+  };
+};
+
 export const CategoryServices = {
   createProductService,
   updateProduct,
@@ -567,4 +704,5 @@ export const CategoryServices = {
   getAllProducts,
   assignMissingBarcodes,
   getAllTrashProducts,
+  getRankedLowStockProducts
 };
