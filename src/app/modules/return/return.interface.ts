@@ -75,7 +75,7 @@ export interface IReturnParcel {
   refundStatus: RefundStatus;
 
   processedBy: Types.ObjectId;
-
+  pickupDate?: Date;
   notes?: string;
 
   isDeleted: boolean;

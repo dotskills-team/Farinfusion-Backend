@@ -216,9 +216,63 @@ const createReturn = async (
   }
 };
 
+// const getAllReturns = async (query: Record<string, string>) => {
+//   const queryBuilder = new QueryBuilder(
+//     ReturnParcel.find({ isDeleted: false }).populate(returnPopulateFields),
+//     query,
+//   );
+
+//   const returnsData = queryBuilder
+//     .filter()
+//     .search(returnSearchableFields)
+//     .sort()
+//     .fields()
+//     .paginate();
+
+//   const [data, meta] = await Promise.all([
+//     returnsData.build(),
+//     queryBuilder.getMeta(),
+//   ]);
+
+//   return {
+//     data,
+//     meta,
+//   };
+// };
+
 const getAllReturns = async (query: Record<string, string>) => {
+  const queryObj: any = {};
+
+  const dateFieldMap: Record<string, string> = {
+    created: "createdAt",
+    updated: "updatedAt",
+    pickup: "pickupDate",
+  };
+
+  const dateType = query.dateType || "created";
+  const dateField = dateFieldMap[dateType] || "createdAt";
+
+  if (query["updatedAt[gte]"] || query["updatedAt[lte]"]) {
+    queryObj[dateField] = {};
+
+    if (query["updatedAt[gte]"]) {
+      queryObj[dateField].$gte = new Date(query["updatedAt[gte]"]);
+    }
+
+    if (query["updatedAt[lte]"]) {
+      queryObj[dateField].$lte = new Date(query["updatedAt[lte]"]);
+    }
+  }
+
+  delete query["updatedAt[gte]"];
+  delete query["updatedAt[lte]"];
+  delete query.dateType;
+
   const queryBuilder = new QueryBuilder(
-    ReturnParcel.find({ isDeleted: false }).populate(returnPopulateFields),
+    ReturnParcel.find({
+      isDeleted: false,
+      ...queryObj,
+    }).populate(returnPopulateFields),
     query,
   );
 
@@ -234,10 +288,7 @@ const getAllReturns = async (query: Record<string, string>) => {
     queryBuilder.getMeta(),
   ]);
 
-  return {
-    data,
-    meta,
-  };
+  return { data, meta };
 };
 
 const getSingleReturn = async (id: string) => {

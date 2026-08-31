@@ -142,6 +142,10 @@ const returnParcelSchema = new Schema<IReturnParcel>(
       required: true,
     },
 
+    pickupDate: {
+      type: Date,
+    },
+
     notes: {
       type: String,
       trim: true,
