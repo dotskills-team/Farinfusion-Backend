@@ -26,6 +26,7 @@ router.post(
 );
 
 router.get("/all-products", ProductControllers.getAllProducts);
+router.get("/ranked-low-stock", ProductControllers.getRankedLowStockProducts);
 router.get("/all-trash-products", ProductControllers.getAllTrashProducts);
 router.get("/:slug", ProductControllers.getSingleProduct);
 router.delete(
