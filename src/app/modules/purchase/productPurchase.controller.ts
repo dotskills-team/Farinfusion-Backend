@@ -10,6 +10,8 @@ const createPurchase = catchAsync(async (req: Request, res: Response) => {
     req.user,
   );
 
+  console.log("Purchase create  result:", result);
+
   sendResponse(res, {
     success: true,
     statusCode: httpStatus.CREATED,

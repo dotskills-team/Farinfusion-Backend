@@ -22,6 +22,7 @@ app.use(cors({
         envVars.FRONTEND_URL,
         "https://farinfusion.com",
         "http://localhost:3000",
+        
     ],
     credentials: true
 }))
