@@ -48,6 +48,7 @@ const createReturn = async (
         OrderStatus.CONFIRMED,
         OrderStatus.PARTIAL,
         OrderStatus.CANCELLED,
+        OrderStatus.COMPLETED,
       ].includes(order.orderStatus as OrderStatus)
     ) {
       throw new AppError(
@@ -240,6 +241,58 @@ const createReturn = async (
 //   };
 // };
 
+// const getAllReturns = async (query: Record<string, string>) => {
+//   const queryObj: any = {};
+
+//   const dateFieldMap: Record<string, string> = {
+//     created: "createdAt",
+//     updated: "updatedAt",
+//     pickup: "pickupDate",
+//   };
+
+//   const dateType = query.dateType || "created";
+//   const dateField = dateFieldMap[dateType] || "createdAt";
+
+//   if (query["updatedAt[gte]"] || query["updatedAt[lte]"]) {
+//     queryObj[dateField] = {};
+
+//     if (query["updatedAt[gte]"]) {
+//       queryObj[dateField].$gte = new Date(query["updatedAt[gte]"]);
+//     }
+
+//     if (query["updatedAt[lte]"]) {
+//       queryObj[dateField].$lte = new Date(query["updatedAt[lte]"]);
+//     }
+//   }
+
+//   delete query["updatedAt[gte]"];
+//   delete query["updatedAt[lte]"];
+//   delete query.dateType;
+
+//   const queryBuilder = new QueryBuilder(
+//     ReturnParcel.find({
+//       isDeleted: false,
+//       ...queryObj,
+//     }).populate(returnPopulateFields),
+//     query,
+//   );
+
+//   const returnsData = queryBuilder
+//     .filter()
+//     .search(returnSearchableFields)
+//     .sort()
+//     .fields()
+//     .paginate();
+
+//   const [data, meta] = await Promise.all([
+//     returnsData.build(),
+//     queryBuilder.getMeta(),
+//   ]);
+
+//   return { data, meta };
+// };
+
+
 const getAllReturns = async (query: Record<string, string>) => {
   const queryObj: any = {};
 
@@ -283,12 +336,48 @@ const getAllReturns = async (query: Record<string, string>) => {
     .fields()
     .paginate();
 
+  const statsAgg = await ReturnParcel.aggregate([
+    { $match: { isDeleted: false, ...queryObj } },
+    {
+      $group: {
+        _id: "$returnStatus",
+        count: { $sum: 1 },
+        totalRefunded: {
+          $sum: {
+            $cond: [
+              { $eq: ["$refundStatus", "REFUNDED"] },
+              "$refundAmount",
+              0,
+            ],
+          },
+        },
+      },
+    },
+  ]);
+
+  const formattedStats = {
+    total: 0,
+    PENDING: 0,
+    PROCESSING: 0,
+    COMPLETED: 0,
+    CANCELLED: 0,
+    totalRefunded: 0,
+  };
+
+  statsAgg.forEach((item) => {
+    if (item._id in formattedStats) {
+      formattedStats[item._id as keyof typeof formattedStats] = item.count;
+    }
+    formattedStats.total += item.count;
+    formattedStats.totalRefunded += item.totalRefunded || 0;
+  });
+
   const [data, meta] = await Promise.all([
     returnsData.build(),
     queryBuilder.getMeta(),
   ]);
 
-  return { data, meta };
+  return { data, meta, stats: formattedStats };
 };
 
 const getSingleReturn = async (id: string) => {
