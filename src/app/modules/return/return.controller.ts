@@ -23,6 +23,24 @@ const createReturn = catchAsync(
   },
 );
 
+// const getAllReturns = catchAsync(
+//   async (req: Request, res: Response, next: NextFunction) => {
+//     const query = req.query;
+
+//     const result = await ReturnServices.getAllReturns(
+//       query as Record<string, string>,
+//     );
+
+//     sendResponse(res, {
+//       success: true,
+//       statusCode: httpStatus.OK,
+//       message: "All return parcels retrieved successfully",
+//       data: result.data,
+//       meta: result.meta,
+//     });
+//   },
+// );
+
 const getAllReturns = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const query = req.query;
@@ -35,11 +53,12 @@ const getAllReturns = catchAsync(
       success: true,
       statusCode: httpStatus.OK,
       message: "All return parcels retrieved successfully",
-      data: result.data,
+      data: { data: result.data, stats: result.stats },
       meta: result.meta,
     });
   },
 );
+
 
 const getSingleReturn = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
