@@ -120,6 +120,8 @@ const createReturn = async (
         Number(item.quantity || 0),
       );
 
+      console.log("Product soludDeduction:", soldDeduction);
+
       if (item.shouldRestock && !item.isDamaged) {
         await Product.findByIdAndUpdate(
           item.product,
@@ -128,7 +130,7 @@ const createReturn = async (
               availableStock: Number(item.quantity),
               totalReturned: Number(item.quantity),
               restockCount: 1,
-              totalSold: soldDeduction,
+              totalSold: -soldDeduction,
             },
           },
           {
