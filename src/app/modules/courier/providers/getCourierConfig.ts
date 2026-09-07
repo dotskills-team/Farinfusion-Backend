@@ -25,6 +25,8 @@ export const getCourierConfig = async (provider: CourierProvider) => {
     username: String(configMap.get("username") ?? "").trim(),
     password: String(configMap.get("password") ?? "").trim(),
     baseUrl: String(configMap.get("baseUrl") ?? "").trim(),
+    clientId: String(configMap.get("clientId") ?? "").trim(),
+    clientSecret: String(configMap.get("clientSecret") ?? "").trim(),
   };
 
   return {
