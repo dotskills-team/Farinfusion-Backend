@@ -3,6 +3,7 @@ export const returnSearchableFields = [
   "returnStatus",
   "refundStatus",
   "returnType",
+  "order.customOrderId"
 ];
 
 export const returnPopulateFields = [

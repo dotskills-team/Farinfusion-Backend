@@ -17,6 +17,7 @@ import { courierSettingsRoutes } from "../modules/courierSettings/courierSetting
 import { reviewRoutes } from "../modules/review/review.route";
 import { ProductVerificationRoutes } from "../modules/productVerification/productVerification.route";
 import { ProductBlogRoutes } from "../modules/productBlog/productBlog.route";
+import { aiRoutes } from "../modules/ai/ai.route";
 
 export const router = Router();
 
@@ -92,6 +93,10 @@ const moduleRoutes = [
   {
     path: "/product-purchase",
     route: ProductPurchaseRoutes,
+  },
+  {
+    path: "/ai",
+    route: aiRoutes,
   },
 ];
 
