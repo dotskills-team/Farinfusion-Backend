@@ -294,7 +294,6 @@ const createReturn = async (
 //   return { data, meta };
 // };
 
-
 const getAllReturns = async (query: Record<string, string>) => {
   const queryObj: any = {};
 
@@ -303,6 +302,8 @@ const getAllReturns = async (query: Record<string, string>) => {
     updated: "updatedAt",
     pickup: "pickupDate",
   };
+
+  console.log("return query ", query);
 
   const dateType = query.dateType || "created";
   const dateField = dateFieldMap[dateType] || "createdAt";
@@ -323,20 +324,43 @@ const getAllReturns = async (query: Record<string, string>) => {
   delete query["updatedAt[lte]"];
   delete query.dateType;
 
-  const queryBuilder = new QueryBuilder(
-    ReturnParcel.find({
-      isDeleted: false,
-      ...queryObj,
-    }).populate(returnPopulateFields),
-    query,
-  );
+  // Check searchTerm against Order customOrderId first
+  // Check if searchTerm is an Order customOrderId
+let isOrderSearch = false;
 
-  const returnsData = queryBuilder
-    .filter()
-    .search(returnSearchableFields)
-    .sort()
-    .fields()
-    .paginate();
+if (query.searchTerm?.trim()) {
+  const matchingOrder = await Order.findOne({
+    customOrderId: {
+      $regex: `^${query.searchTerm.trim()}$`,
+      $options: "i",
+    },
+  } as any).select("_id");
+
+  if (matchingOrder) {
+    isOrderSearch = true;
+
+    queryObj.order = matchingOrder._id;
+  }
+}
+
+const queryBuilder = new QueryBuilder(
+  ReturnParcel.find({
+    isDeleted: false,
+    ...queryObj,
+  }).populate(returnPopulateFields),
+  query,
+);
+
+const returnsData = queryBuilder.filter();
+
+if (!isOrderSearch) {
+  returnsData.search(returnSearchableFields);
+}
+
+returnsData
+  .sort()
+  .fields()
+  .paginate();
 
   const statsAgg = await ReturnParcel.aggregate([
     { $match: { isDeleted: false, ...queryObj } },
@@ -370,6 +394,7 @@ const getAllReturns = async (query: Record<string, string>) => {
     if (item._id in formattedStats) {
       formattedStats[item._id as keyof typeof formattedStats] = item.count;
     }
+
     formattedStats.total += item.count;
     formattedStats.totalRefunded += item.totalRefunded || 0;
   });
@@ -418,18 +443,119 @@ const updateReturnStatus = async (
   return await ReturnParcel.findById(id).populate(returnPopulateFields);
 };
 
+// const deleteReturn = async (id: string) => {
+//   const result = await ReturnParcel.findById(id);
+
+//   if (!result) {
+//     throw new AppError(httpStatus.NOT_FOUND, "Return parcel not found");
+//   }
+
+//   result.isDeleted = true;
+
+//   await result.save();
+
+//   return null;
+// };
+
 const deleteReturn = async (id: string) => {
-  const result = await ReturnParcel.findById(id);
+  const session = await mongoose.startSession();
 
-  if (!result) {
-    throw new AppError(httpStatus.NOT_FOUND, "Return parcel not found");
+  try {
+    session.startTransaction();
+
+    const result = await ReturnParcel.findById(id).session(session);
+
+    if (!result) {
+      throw new AppError(
+        httpStatus.NOT_FOUND,
+        "Return parcel not found",
+      );
+    }
+
+    if (result.isDeleted) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        "Return parcel is already deleted",
+      );
+    }
+
+    const order = await Order.findById(result.order).session(session);
+
+    if (!order) {
+      throw new AppError(
+        httpStatus.NOT_FOUND,
+        "Order not found",
+      );
+    }
+
+    // Reverse product inventory changes
+    for (const item of result.returnedProducts || []) {
+      const quantity = Number(item.quantity || 0);
+
+      if (item.shouldRestock && !item.isDamaged) {
+        await Product.findByIdAndUpdate(
+          item.product,
+          {
+            $inc: {
+              availableStock: -quantity,
+              totalReturned: -quantity,
+              restockCount: -1,
+              totalSold: quantity,
+            },
+          },
+          {
+            session,
+          },
+        );
+      } else {
+        await Product.findByIdAndUpdate(
+          item.product,
+          {
+            $inc: {
+              totalReturned: -quantity,
+            },
+          },
+          {
+            session,
+          },
+        );
+      }
+    }
+
+    // Calculate total quantity from this return parcel
+    const deletedReturnQty =
+      result.returnedProducts?.reduce(
+        (sum: number, item: any) =>
+          sum + Number(item.quantity || 0),
+        0,
+      ) || 0;
+
+    // Rollback order return statistics
+    order.totalReturnedQuantity = Math.max(
+      0,
+      (order.totalReturnedQuantity || 0) - deletedReturnQty,
+    );
+
+    order.returnCount = Math.max(
+      0,
+      (order.returnCount || 0) - 1,
+    );
+
+    // Soft delete return parcel
+    result.isDeleted = true;
+
+    await result.save({ session });
+    await order.save({ session });
+
+    await session.commitTransaction();
+
+    return null;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
   }
-
-  result.isDeleted = true;
-
-  await result.save();
-
-  return null;
 };
 
 export const ReturnServices = {

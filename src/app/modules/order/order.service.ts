@@ -164,6 +164,9 @@ const createOrder = async (payload: TCreateOrderPayload) => {
       payload.shippingCost || 0,
     );
 
+    console.log("Order Payload ", payload);
+    console.log("Calculated Order ", calculatedOrder);
+
     const reservation = await reserveOrderProducts(
       calculatedOrder.productsWithPrice.map((item: any) => ({
         product:
@@ -352,6 +355,8 @@ if (payload.couponCode) {
       if (payload.advanceDetails?.option && remainingAdvance > 0) {
         advanceAmount = Math.min(remainingAdvance, total);
         remainingAdvance -= advanceAmount;
+
+        total -= advanceAmount;
       }
 
       const orderDoc: any = {
@@ -413,7 +418,7 @@ if (payload.couponCode) {
 
             transactionId,
 
-            amount: orderDoc.total,
+            amount: orderDoc.total + (advanceAmount || 0),
 
             paymentStatus:
               payload.paymentMethod === PaymentMethod.COD
