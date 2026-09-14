@@ -182,18 +182,18 @@ const trackCourier = async (trackingCode: string) => {
       );
 
       if (order) {
-        if (!(order as any).isRestocked) {
-          for (const item of order.products) {
-            await Product.findByIdAndUpdate(item.product, {
-              $inc: {
-                availableStock: item.quantity,
-                totalSold: -item.quantity,
-              },
-            });
-          }
+        // if (!(order as any).isRestocked) {
+        //   for (const item of order.products) {
+        //     await Product.findByIdAndUpdate(item.product, {
+        //       $inc: {
+        //         availableStock: item.quantity,
+        //         totalSold: -item.quantity,
+        //       },
+        //     });
+        //   }
 
-          (order as any).isRestocked = true;
-        }
+        //   (order as any).isRestocked = true;
+        // }
 
         order.deliveryStatus = DeliveryStatus.CANCELLED;
         order.orderStatus = OrderStatus.CANCELLED;
@@ -308,24 +308,27 @@ export const syncCourierOrderStatus = async (
     }),
   });
 
-  if (mappedStatus === CourierDeliveryStatus.CANCELLED) {
-    const order = await Order.findById(courier.order);
-
-    if (order && !(order as any).isRestocked) {
-      for (const item of order.products) {
-        await Product.findByIdAndUpdate(item.product, {
-          $inc: {
-            availableStock: item.quantity,
-            totalSold: -item.quantity,
-          },
-        });
-      }
-
-      (order as any).isRestocked = true;
-      await order.save();
-    }
-  }
+ 
 };
+
+
+ // if (mappedStatus === CourierDeliveryStatus.CANCELLED) {
+  //   const order = await Order.findById(courier.order);
+
+  //   if (order && !(order as any).isRestocked) {
+  //     for (const item of order.products) {
+  //       await Product.findByIdAndUpdate(item.product, {
+  //         $inc: {
+  //           availableStock: item.quantity,
+  //           totalSold: -item.quantity,
+  //         },
+  //       });
+  //     }
+
+  //     (order as any).isRestocked = true;
+  //     await order.save();
+  //   }
+  // }
 
 export const CourierServices = {
   createCourier,

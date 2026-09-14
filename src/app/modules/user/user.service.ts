@@ -132,8 +132,6 @@ const createUserService = async (payload: Partial<IUser>) => {
 
 const getMe = async (userId: string) => {
   const user = await User.findById(userId).select("-password");
-console.log("Hello ", user)
-
   return {
     data: user,
   };
