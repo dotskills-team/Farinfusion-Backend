@@ -5,7 +5,6 @@ import app from "./app";
 import { envVars } from "./app/config/env";
 import { seedAdmin } from "./app/utils/seedAdmin";
 import { startCourierCron } from "./app/cron/courier.cron";
-import testAi from "./test-ai";
 let server: Server;
 
 const startServer = async () => {
@@ -25,7 +24,6 @@ const startServer = async () => {
 };
 
 startServer();
-// testAi();
 process.on("unhandledRejection", (err) => {
   console.log("uncaught error detected.... server shutting down", err);
   if (server) {
