@@ -112,6 +112,7 @@ const buildProductDescription = (products: any[], maxLength: number) => {
 
 const mapPaperflyStatus = (statusObj: any): CourierDeliveryStatus => {
   if (!statusObj) {
+    console.log("Paperfly status object is undefined or null", statusObj);
     return CourierDeliveryStatus.PENDING;
   }
 
@@ -260,6 +261,9 @@ const trackCourier = async (trackingCode: string) => {
 
   const referenceNumber =
     courier.merchantOrderReference || courier.trackingCode;
+  
+  // console.log("paperfly tracking reference number ", referenceNumber
+  // )
 
   try {
     const config = await getPaperflyCredentials();

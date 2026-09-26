@@ -27,6 +27,7 @@ export enum CourierDeliveryStatus {
   PARTIAL_DELIVERED = "PARTIAL_DELIVERED",
   CANCELLED = "CANCELLED",
   HOLD = "HOLD",
+  COURIERASSIGNED = "COURIERASSIGNED",
 }
 
 export interface ICourier {
