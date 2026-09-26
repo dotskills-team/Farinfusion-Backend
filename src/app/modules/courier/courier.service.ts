@@ -216,10 +216,10 @@ const createCourier = async (orderId: string) => {
   }
   const existing = await Courier.findOne({ order: orderId });
 
-  // if (existing) {
-  //   existing.status = CourierStatus.CANCELLED; // mark old one
-  //   await existing.save();
-  // }
+  if (existing) {
+    existing.status = CourierStatus.CANCELLED; // mark old one
+    await existing.save();
+  }
 
   const payload = mapOrderToSteadfast(order);
 
