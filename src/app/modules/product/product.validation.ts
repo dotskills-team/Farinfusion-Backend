@@ -31,10 +31,18 @@ export const createProductZodSchema = z.object({
   brand: z
     .string({ invalid_type_error: "Brand must be a string (ObjectId)" })
     .min(1, { message: "Brand is required" }),
-isBestSelling: z.boolean().optional(),
+  isBestSelling: z.boolean().optional(),
+  // category: z
+  //   .string({ invalid_type_error: "Category must be a string (ObjectId)" })
+  //   .min(1, { message: "Category is required" }),
   category: z
-    .string({ invalid_type_error: "Category must be a string (ObjectId)" })
-    .min(1, { message: "Category is required" }),
+    .array(
+      z
+        .string({ invalid_type_error: "Category must be a string (ObjectId)" })
+        .min(1, { message: "Category id cannot be empty" }),
+      { invalid_type_error: "Category must be an array of ObjectIds" }
+    )
+    .min(1, { message: "At least one category is required" }),
 
   size: z
     .string({ invalid_type_error: "Size must be a string" })

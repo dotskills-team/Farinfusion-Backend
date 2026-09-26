@@ -46,10 +46,20 @@ const productSchema = new Schema<IProduct>(
       ref: "Brand",
       required: true,
     },
-    category: {
-      type: Types.ObjectId,
+    // category: {
+    //   type: Types.ObjectId,
+    //   ref: "Category",
+    //   required: true,
+    // },
+     category: {
+      type: [Types.ObjectId],
       ref: "Category",
       required: true,
+      validate: {
+        validator: (val: Types.ObjectId[]) => Array.isArray(val) && val.length > 0,
+        message: "At least one category is required",
+      },
+      index: true,
     },
     size: {
       type: String,
