@@ -21,7 +21,8 @@ export interface IProduct {
   // Basic Info
   title: string; // e.g., "Aveeno Baby Sunscreen"
   brand: Types.ObjectId; // Reference to Brand collection
-  category: Types.ObjectId; // Reference to Category collection
+  // category: Types.ObjectId; // Reference to Category collection
+  category: Types.ObjectId[]; // Reference to Category collection
   size?: string; // e.g., "88ml"
   slug?: string; // URL-friendly slug
 

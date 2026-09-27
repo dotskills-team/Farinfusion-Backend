@@ -264,23 +264,6 @@ const getSingleProduct = async (slug: string) => {
   };
 };
 
-const deleteProduct = async (id: string) => {
-  const product = await Product.findById(id);
-  if (!product) {
-    throw new AppError(httpStatus.NOT_FOUND, "Product Not Found");
-  }
-
-  if (product.images && product.images.length > 0) {
-    await Promise.all(
-      product.images.map((image) => deleteImageFromCloudinary(image)),
-    );
-  }
-
-  await Product.findByIdAndDelete(id);
-
-  return { data: null };
-};
-
 const getAllProducts = async (query: Record<string, string>) => {
   const orderMatch: any = {
     isDeleted: false,
@@ -425,11 +408,28 @@ const getAllProducts = async (query: Record<string, string>) => {
   delete query["price[gte]"];
   delete query["price[lte]"];
 
-  if (query.category) {
-    const category = await Category.findOne({ slug: query.category });
+  // if (query.category) {
+  //   const category = await Category.findOne({ slug: query.category });
 
-    if (category) {
-      productQuery.category = category._id;
+  //   if (category) {
+  //     productQuery.category = category._id;
+  //   }
+
+  //   delete query.category;
+  // }
+
+  if (query.category) {
+    // support single or comma-separated multiple category slugs
+    const categorySlugs = query.category.split(",").map((s) => s.trim());
+
+    const categories = await Category.find({ slug: { $in: categorySlugs } });
+
+    if (categories.length > 0) {
+      const categoryIds = categories.map((c) => c._id);
+      productQuery.category = { $in: categoryIds };
+    } else {
+      // no matching category found -> force empty result
+      productQuery.category = { $in: [] };
     }
 
     delete query.category;
@@ -560,6 +560,25 @@ const getAllTrashProducts = async (query: Record<string, string>) => {
 };
 
 // Add this in product.service.ts
+
+const deleteProduct = async (id: string) => {
+  const product = await Product.findById(id);
+  if (!product) {
+    throw new AppError(httpStatus.NOT_FOUND, "Product Not Found");
+  }
+
+  if (product.images && product.images.length > 0) {
+    await Promise.all(
+      product.images.map((image) => deleteImageFromCloudinary(image)),
+    );
+  }
+
+  await Product.findByIdAndDelete(id);
+
+  return { data: null };
+};
+
+
 
 type ProductRankCategory = "HOT" | "MEDIUM" | "NORMAL";
 
