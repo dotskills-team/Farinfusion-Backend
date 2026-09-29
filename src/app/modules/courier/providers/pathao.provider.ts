@@ -359,6 +359,8 @@ const trackCourier = async (trackingCode: string) => {
   let mappedStatus: CourierDeliveryStatus;
 
   switch (pathaoStatus) {
+    case "waiting for pickup":
+    case "assigned for delivery":
     case "pending":
     case "pickup requested":
       mappedStatus = CourierDeliveryStatus.COURIERASSIGNED;
