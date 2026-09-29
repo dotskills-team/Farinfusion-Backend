@@ -578,8 +578,6 @@ const deleteProduct = async (id: string) => {
   return { data: null };
 };
 
-
-
 type ProductRankCategory = "HOT" | "MEDIUM" | "NORMAL";
 
 const paginateArray = (arr: any[], page: number, limit: number) => {
