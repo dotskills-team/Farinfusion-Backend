@@ -18,6 +18,7 @@ import { reviewRoutes } from "../modules/review/review.route";
 import { ProductVerificationRoutes } from "../modules/productVerification/productVerification.route";
 import { ProductBlogRoutes } from "../modules/productBlog/productBlog.route";
 import { aiRoutes } from "../modules/ai/ai.route";
+import { scheduleRoutes } from "../modules/schedule/schedule.route";
 
 export const router = Router();
 
@@ -97,6 +98,10 @@ const moduleRoutes = [
   {
     path: "/ai",
     route: aiRoutes,
+  },
+  {
+    path: "/schedules",
+    route: scheduleRoutes
   },
 ];
 
