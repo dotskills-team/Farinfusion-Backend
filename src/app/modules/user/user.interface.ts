@@ -31,4 +31,6 @@ export interface IUser {
   salary?: number;
   commissionSalary?: number;
   role: Role;
+  chatStatus?: "ONLINE" | "OFFLINE";
+
 }

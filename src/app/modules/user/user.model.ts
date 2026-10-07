@@ -60,6 +60,8 @@ const userSchema = new Schema<IUser>(
     isVerified: { type: Boolean, default: false },
     salary: { type: Number },
     commissionSalary: { type: Number },
+
+    chatStatus: { type: String, enum: ["ONLINE", "OFFLINE"], default: "OFFLINE" },
   },
   {
     timestamps: true,
