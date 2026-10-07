@@ -9,6 +9,7 @@ import notFound from "./app/middlewares/notFound";
 import { envVars } from "./app/config/env";
 // import { envVars } from "./app/config/env"
 import dns from "dns"
+import { facebookWebhookRoutes } from "./app/modules/facebook/facebook.route";
 dns.setServers(["1.1.1.1", "8.8.8.8"])
 
 
@@ -26,6 +27,8 @@ app.use(cors({
     ],
     credentials: true
 }))
+
+app.use("/api/v1/facebook/webhook", facebookWebhookRoutes);
 
 app.use(express.json())
 

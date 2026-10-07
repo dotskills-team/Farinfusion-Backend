@@ -19,6 +19,7 @@ import { ProductVerificationRoutes } from "../modules/productVerification/produc
 import { ProductBlogRoutes } from "../modules/productBlog/productBlog.route";
 import { aiRoutes } from "../modules/ai/ai.route";
 import { scheduleRoutes } from "../modules/schedule/schedule.route";
+import { facebookRoutes } from "../modules/facebook/facebook.route";
 
 export const router = Router();
 
@@ -103,6 +104,8 @@ const moduleRoutes = [
     path: "/schedules",
     route: scheduleRoutes
   },
+  { path: "/facebook",
+     route: facebookRoutes }
 ];
 
 moduleRoutes.forEach((route) => {
