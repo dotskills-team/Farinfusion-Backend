@@ -1,3 +1,4 @@
+
 import { Types } from "mongoose";
 
 export enum FbConvStatus {
@@ -57,4 +58,17 @@ export interface IFbSettings {
   autoAssign: boolean;
   slaMinutes: number;
   returnToPoolMinutes: number;
+}
+
+// Short-lived copy of messages seen on the webhook (auto-deleted by a TTL index)
+export interface IFbRecentMessage {
+  _id?: Types.ObjectId;
+  conversation: Types.ObjectId;
+  mid: string;
+  direction: "inbound" | "outbound";
+  text?: string;
+  attachments?: { type?: string; name?: string; url?: string }[];
+  sentBy?: Types.ObjectId | null;
+  myReaction?: string | null;
+  timestamp: Date;
 }

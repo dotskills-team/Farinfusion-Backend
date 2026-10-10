@@ -1,3 +1,4 @@
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Request, Response } from "express";
 import httpStatus from "http-status-codes";
@@ -82,6 +83,22 @@ const replyToConversation = catchAsync(async (req: Request, res: Response) => {
     statusCode: httpStatus.OK,
     success: true,
     message: "Reply Sent Successfully",
+    data: result,
+  });
+});
+
+const reactToMessage = catchAsync(async (req: Request, res: Response) => {
+  const result = await FacebookServices.reactToMessage(
+    req.user as JwtPayload,
+    req.params.id as string,
+    req.body.messageId,
+    req.body.reaction,
+  );
+
+  sendResponse(res, {
+    statusCode: httpStatus.OK,
+    success: true,
+    message: "Reaction Updated Successfully",
     data: result,
   });
 });
@@ -242,6 +259,7 @@ export const FacebookControllers = {
   getConversations,
   getMessages,
   replyToConversation,
+  reactToMessage,
   claimConversation,
   assignConversation,
   transferConversation,
