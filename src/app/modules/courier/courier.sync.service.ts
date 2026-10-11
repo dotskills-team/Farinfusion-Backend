@@ -26,9 +26,9 @@ const syncActiveCouriers = async () => {
 
       await provider.trackCourier(courier.trackingCode);
     } catch (err) {
-      console.error(
-        `❌ Sync failed: ${courier.courierName} - ${courier.trackingCode}`,
-      );
+      // console.error(
+      //   `❌ Sync failed: ${courier.courierName} - ${courier.trackingCode}`,
+      // );
     }
   }
 };
