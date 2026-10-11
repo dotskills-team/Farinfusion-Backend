@@ -18,7 +18,7 @@ const readCookie = (cookie: string | undefined, name: string) => {
 export const initSocket = (server: HttpServer) => {
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL?.split(",") || "http://localhost:3000",
+      origin: process.env.CLIENT_URL?.split(",") || "https://farinfusion-frontend.onrender.com",
       credentials: true,
     },
   });
