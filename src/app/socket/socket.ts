@@ -7,6 +7,9 @@ import { Role } from "../modules/user/user.interface";
 let io: Server | null = null;
 
 const readCookie = (cookie: string | undefined, name: string) => {
+
+  console.log("Reading cookie:", cookie, "for name:", name); // Debugging line to check the cookie value
+
   if (!cookie) return undefined;
   const found = cookie
     .split(";")
@@ -16,22 +19,36 @@ const readCookie = (cookie: string | undefined, name: string) => {
 };
 
 export const initSocket = (server: HttpServer) => {
+  // io = new Server(server, {
+  //   cors: {
+  //     origin: process.env.CLIENT_URL?.split(",") || "https://farinfusion-frontend.onrender.com",
+  //     credentials: true,
+  //   },
+  // });
+
   io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL?.split(",") || "https://farinfusion-frontend.onrender.com",
+      origin: (process.env.CLIENT_URL || "https://farinfusion-frontend.onrender.com")
+        .split(",")
+        .map((url) => url.trim())
+        .filter(Boolean),
       credentials: true,
     },
   });
 
+
   // JWT verify: token na thakle ba invalid hole connect-i hobe na
   io.use((socket, next) => {
+
+    console.log("socket", socket)
+
     try {
       const token =
         (socket.handshake.auth as any)?.token ||
         readCookie(socket.handshake.headers.cookie, "accessToken");
 
-        console.log("Socket token:", token); // Debugging line to check the token value
-        
+      console.log("Socket token:", token); // Debugging line to check the token value
+
       if (!token) return next(new Error("Unauthorized"));
 
       const decoded = jwt.verify(
