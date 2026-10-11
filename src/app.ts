@@ -23,6 +23,7 @@ app.use(cors({
         envVars.FRONTEND_URL,
         "https://farinfusion.com",
         "http://localhost:3000",
+        "https://farinfusion-frontend.onrender.com"
         
     ],
     credentials: true
