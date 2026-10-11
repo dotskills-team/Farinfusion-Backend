@@ -351,10 +351,10 @@ const trackCourier = async (trackingCode: string) => {
     `${config.baseUrl}/aladdin/api/v1/orders/${trackingCode}/info`,
     { headers },
   );
-  console.log("PATHAO TRACKING RESPONSE:", res.data);
+  // console.log("PATHAO TRACKING RESPONSE:", res.data);
 
   const pathaoStatus = res.data?.data?.order_status?.toLowerCase();
-  console.log(`${trackingCode}: PATHAO status:`, pathaoStatus);
+  // console.log(`${trackingCode}: PATHAO status:`, pathaoStatus);
 
   let mappedStatus: CourierDeliveryStatus;
 

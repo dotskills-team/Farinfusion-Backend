@@ -29,6 +29,9 @@ export const initSocket = (server: HttpServer) => {
       const token =
         (socket.handshake.auth as any)?.token ||
         readCookie(socket.handshake.headers.cookie, "accessToken");
+
+        console.log("Socket token:", token); // Debugging line to check the token value
+        
       if (!token) return next(new Error("Unauthorized"));
 
       const decoded = jwt.verify(
