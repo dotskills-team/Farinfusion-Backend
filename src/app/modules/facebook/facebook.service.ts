@@ -4,7 +4,7 @@
 // import httpStatus from "http-status-codes";
 // import { JwtPayload } from "jsonwebtoken";
 // import AppError from "../../errorHelpers/appError";
-// import { emitToRooms } from "../../socket/socket";
+// import { emitToRooms, signSocketToken } from "../../socket/socket";
 // import { QueryBuilder } from "../../utils/QueryBuilder";
 // import { IsActive, Role } from "../user/user.interface";
 // import { User } from "../user/user.model";
@@ -66,12 +66,18 @@
 //       path.split("?")[0],
 //       JSON.stringify(err),
 //     );
-//     throw new AppError(
+//     const appError: any = new AppError(
 //       httpStatus.BAD_GATEWAY,
 //       err?.message || "Facebook API error",
 //     );
+//     appError.fb = err; // keep Meta's code / subcode for callers
+//     throw appError;
 //   }
 // };
+
+// // Meta: "Object with ID ... does not exist, or cannot be loaded due to missing permissions"
+// const isMissingObjectError = (e: any) =>
+//   e?.fb?.code === 100 && e?.fb?.error_subcode === 33;
 
 // const sendFbText = async (psid: string, text: string, humanAgent: boolean) =>
 //   fbFetch("me/messages", {
@@ -180,17 +186,23 @@
 // /* Settings                                                            */
 // /* ------------------------------------------------------------------ */
 
+// // Short-lived token for the socket handshake. The socket can't rely on cookies when
+// // the frontend and the API are on different domains, so the API hands one out instead
+// const getSocketToken = async (user: JwtPayload) => ({
+//   token: signSocketToken({ userId: user.userId, role: user.role }),
+// });
+
 // const getSettings = async () =>
 //   FbSettings.findOneAndUpdate(
 //     { key: "default" },
 //     { $setOnInsert: { key: "default" } },
-//     { upsert: true, new: true, setDefaultsOnInsert: true },
+//     { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
 //   );
 
 // const updateSettings = async (payload: Record<string, any>) =>
 //   FbSettings.findOneAndUpdate({ key: "default" }, payload, {
 //     upsert: true,
-//     new: true,
+//     returnDocument: "after",
 //     runValidators: true,
 //     setDefaultsOnInsert: true,
 //   });
@@ -511,7 +523,24 @@
 //       }
 //     }
 //     if (convo.fbThreadId) {
-//       const res = await getFbThreadMessages(convo.fbThreadId, after);
+//       let res;
+//       try {
+//         res = await getFbThreadMessages(convo.fbThreadId, after);
+//       } catch (err) {
+//         if (!isMissingObjectError(err)) throw err;
+
+//         // The cached thread id may be stale (e.g. saved under another Page or
+//         // token). Look it up again once. If it is the same id, it's a real permission problem
+//         const fresh = await getFbThreadId(convo.psid);
+//         if (!fresh || fresh === convo.fbThreadId) throw err;
+
+//         convo.fbThreadId = fresh;
+//         await FbConversation.updateOne(
+//           { _id: convo._id },
+//           { fbThreadId: fresh },
+//         );
+//         res = await getFbThreadMessages(fresh, after);
+//       }
 //       metaMessages = res.messages;
 //       nextCursor = res.nextCursor;
 //     }
@@ -611,7 +640,7 @@
 //       status: FbConvStatus.OPEN,
 //       slaNotified: false,
 //     },
-//     { new: true },
+//     { returnDocument: "after" },
 //   );
 //   if (!claimed) {
 //     throw new AppError(
@@ -841,7 +870,7 @@
 //   const updated = await User.findByIdAndUpdate(
 //     user.userId,
 //     { chatStatus },
-//     { new: true },
+//     { returnDocument: "after" },
 //   ).select("name chatStatus");
 
 //   // Offline hole open chat gulo onno online moderator-e ba pool-e jabe
@@ -962,6 +991,7 @@
 // export const FacebookServices = {
 //   isValidSignature,
 //   handleWebhook,
+//   getSocketToken,
 //   getSettings,
 //   updateSettings,
 //   getConversations,
@@ -981,7 +1011,7 @@
 // };
 
 
-// v2
+// v3
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import crypto from "crypto";
@@ -1107,15 +1137,35 @@ const sendFbReaction = async (
   });
 
 const getFbProfile = async (psid: string) => {
+  let name = "";
+  let profilePic: string | undefined;
+
   try {
     const d = await fbFetch(`${psid}?fields=first_name,last_name,profile_pic`);
-    return {
-      name: `${d.first_name || ""} ${d.last_name || ""}`.trim(),
-      profilePic: d.profile_pic as string | undefined,
-    };
+    name = `${d.first_name || ""} ${d.last_name || ""}`.trim();
+    profilePic = d.profile_pic as string | undefined;
   } catch {
-    return null;
+    // Fall through to the conversation lookup below
   }
+
+  // Without the "Business Asset User Profile Access" feature (Advanced Access),
+  // Meta returns an empty profile for real customers. The conversation's
+  // participant list still has their name, so use that as a fallback
+  if (!name) {
+    try {
+      const d = await fbFetch(
+        `${process.env.FB_PAGE_ID}/conversations?platform=messenger&user_id=${psid}&fields=participants`,
+      );
+      const person = d?.data?.[0]?.participants?.data?.find(
+        (p: any) => p.id === psid,
+      );
+      name = person?.name || "";
+    } catch {
+      // Name stays empty. The caller keeps the placeholder
+    }
+  }
+
+  return name || profilePic ? { name, profilePic } : null;
 };
 
 const getFbThreadId = async (psid: string): Promise<string | null> => {
@@ -1482,6 +1532,27 @@ const getConversations = async (
 // messages. So the first page also merges in recent webhook messages (short-lived DB copy)
 const getMessages = async (user: JwtPayload, id: string, after?: string) => {
   const convo: any = await getConvo(id);
+
+  // Still showing the placeholder name? Try again in the background (no waiting here).
+  // The event below makes open dashboards refresh the list
+  if (!after && convo.customerName === "Facebook User") {
+    getFbProfile(convo.psid)
+      .then(async (profile) => {
+        if (!profile?.name) return;
+        await FbConversation.updateOne(
+          { _id: convo._id },
+          {
+            customerName: profile.name,
+            ...(profile.profilePic ? { profilePic: profile.profilePic } : {}),
+          },
+        );
+        emitToRooms(CHAT_ROOMS, "fb:assignment", {
+          conversationId: convo._id,
+          assignedTo: convo.assignedTo,
+        });
+      })
+      .catch(() => undefined);
+  }
 
   const recentPromise: Promise<any[]> = after
     ? Promise.resolve([])
