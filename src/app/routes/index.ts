@@ -20,6 +20,7 @@ import { ProductBlogRoutes } from "../modules/productBlog/productBlog.route";
 import { aiRoutes } from "../modules/ai/ai.route";
 import { scheduleRoutes } from "../modules/schedule/schedule.route";
 import { facebookRoutes } from "../modules/facebook/facebook.route";
+import { WrongAssignedProductRoutes } from "../modules/wrongassignedproduct/wrongassignedproduct.route";
 
 export const router = Router();
 
@@ -55,6 +56,10 @@ const moduleRoutes = [
   {
     path: "/returns",
     route: returnRoutes,
+  },
+   {
+    path: "/wrongassignedproduct",
+    route: WrongAssignedProductRoutes,
   },
   {
     path: "/lead",

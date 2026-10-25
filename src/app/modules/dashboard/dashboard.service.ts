@@ -129,84 +129,25 @@ const getDashboardOverview = async (
   const staffEarningsPromise =
     role === Role.ADMIN
       ? Order.aggregate([
-          {
-            $match: {
-              isDeleted: false,
-              isPublished: true,
-              orderStatus: { $in: ["COMPLETED", "PARTIAL"] },
-              deliveryStatus: { $in: ["DELIVERED", "PARTIAL"] },
-              ...queryObj,
-            },
-          },
-          {
-            $addFields: {
-              orderValue: {
-                $max: [
-                  {
-                    $subtract: ["$total", { $ifNull: ["$shippingCost", 0] }],
-                  },
-                  0,
-                ],
-              },
-            },
-          },
-          {
-            $lookup: {
-              from: "users",
-              localField: "seller",
-              foreignField: "_id",
-              as: "seller",
-            },
-          },
-          {
-            $unwind: {
-              path: "$seller",
-              preserveNullAndEmptyArrays: false,
-            },
-          },
-          {
-            $addFields: {
-              perOrderSalary: {
-                $cond: [
-                  { $gt: ["$seller.commissionSalary", 0] },
-                  "$seller.commissionSalary",
-                  0,
-                ],
-              },
-            },
-          },
-          {
-            $group: {
-              _id: "$seller._id",
-              sellerName: { $first: "$seller.name" },
-              phone: { $first: "$seller.phone" },
-              totalOrders: { $sum: 1 },
-              totalOrderValue: { $sum: "$orderValue" },
-              totalEarnings: { $sum: "$perOrderSalary" },
-              avgPerOrderSalary: { $avg: "$perOrderSalary" },
-            },
-          },
-          { $sort: { totalEarnings: -1 } },
-        ])
-      : Promise.resolve(undefined);
-
-  const totalUsersPromise =
-    role === Role.ADMIN ? User.countDocuments() : Promise.resolve(undefined);
-
-  const totalProductsPromise =
-    role === Role.ADMIN
-      ? Product.countDocuments({ isDeleted: false })
-      : Promise.resolve(undefined);
-
-  const staffPerformancePromise = [Role.ADMIN, Role.MANAGER].includes(
-    role as Role,
-  )
-    ? Order.aggregate([
         {
           $match: {
             isDeleted: false,
             isPublished: true,
+            orderStatus: { $in: ["COMPLETED", "PARTIAL"] },
+            deliveryStatus: { $in: ["DELIVERED", "PARTIAL"] },
             ...queryObj,
+          },
+        },
+        {
+          $addFields: {
+            orderValue: {
+              $max: [
+                {
+                  $subtract: ["$total", { $ifNull: ["$shippingCost", 0] }],
+                },
+                0,
+              ],
+            },
           },
         },
         {
@@ -224,52 +165,111 @@ const getDashboardOverview = async (
           },
         },
         {
-          $group: {
-            _id: "$seller._id",
-            sellerName: { $first: "$seller.name" },
-            email: { $first: "$seller.email" },
-            phone: { $first: "$seller.phone" },
-            role: { $first: "$seller.role" },
-            profileImage: { $first: "$seller.profileImage" },
-            commissionPerOrder: { $first: "$seller.commissionSalary" },
-            totalOrders: { $sum: 1 },
-            pendingOrders: {
-              $sum: { $cond: [{ $eq: ["$orderStatus", "PENDING"] }, 1, 0] },
-            },
-            confirmedOrders: {
-              $sum: { $cond: [{ $eq: ["$orderStatus", "CONFIRMED"] }, 1, 0] },
-            },
-            completedOrders: {
-              $sum: { $cond: [{ $eq: ["$orderStatus", "COMPLETED"] }, 1, 0] },
-            },
-            cancelledOrders: {
-              $sum: { $cond: [{ $eq: ["$orderStatus", "CANCELLED"] }, 1, 0] },
-            },
-            partialOrders: {
-              $sum: { $cond: [{ $eq: ["$orderStatus", "PARTIAL"] }, 1, 0] },
-            },
-            revenue: {
-              $sum: {
-                $cond: [
-                  { $in: ["$orderStatus", ["COMPLETED", "PARTIAL"]] },
-                  { $subtract: ["$total", { $ifNull: ["$shippingCost", 0] }] },
-                  0,
-                ],
-              },
-            },
-            totalCommission: {
-              $sum: {
-                $cond: [
-                  { $in: ["$orderStatus", ["COMPLETED", "PARTIAL"]] },
-                  "$seller.commissionSalary",
-                  0,
-                ],
-              },
+          $addFields: {
+            perOrderSalary: {
+              $cond: [
+                { $gt: ["$seller.commissionSalary", 0] },
+                "$seller.commissionSalary",
+                0,
+              ],
             },
           },
         },
-        { $sort: { totalOrders: -1 } },
+        {
+          $group: {
+            _id: "$seller._id",
+            sellerName: { $first: "$seller.name" },
+            phone: { $first: "$seller.phone" },
+            totalOrders: { $sum: 1 },
+            totalOrderValue: { $sum: "$orderValue" },
+            totalEarnings: { $sum: "$perOrderSalary" },
+            avgPerOrderSalary: { $avg: "$perOrderSalary" },
+          },
+        },
+        { $sort: { totalEarnings: -1 } },
       ])
+      : Promise.resolve(undefined);
+
+  const totalUsersPromise =
+    role === Role.ADMIN ? User.countDocuments() : Promise.resolve(undefined);
+
+  const totalProductsPromise =
+    role === Role.ADMIN
+      ? Product.countDocuments({ isDeleted: false })
+      : Promise.resolve(undefined);
+
+  const staffPerformancePromise = [Role.ADMIN, Role.MANAGER].includes(
+    role as Role,
+  )
+    ? Order.aggregate([
+      {
+        $match: {
+          isDeleted: false,
+          isPublished: true,
+          ...queryObj,
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "seller",
+          foreignField: "_id",
+          as: "seller",
+        },
+      },
+      {
+        $unwind: {
+          path: "$seller",
+          preserveNullAndEmptyArrays: false,
+        },
+      },
+      {
+        $group: {
+          _id: "$seller._id",
+          sellerName: { $first: "$seller.name" },
+          email: { $first: "$seller.email" },
+          phone: { $first: "$seller.phone" },
+          role: { $first: "$seller.role" },
+          profileImage: { $first: "$seller.profileImage" },
+          commissionPerOrder: { $first: "$seller.commissionSalary" },
+          totalOrders: { $sum: 1 },
+          pendingOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "PENDING"] }, 1, 0] },
+          },
+          confirmedOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "CONFIRMED"] }, 1, 0] },
+          },
+          completedOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "COMPLETED"] }, 1, 0] },
+          },
+          cancelledOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "CANCELLED"] }, 1, 0] },
+          },
+          partialOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "PARTIAL"] }, 1, 0] },
+          },
+          revenue: {
+            $sum: {
+              $cond: [
+                { $in: ["$orderStatus", ["COMPLETED", "PARTIAL"]] },
+                { $subtract: ["$total", { $ifNull: ["$shippingCost", 0] }] },
+                0,
+              ],
+            },
+          },
+          totalCommission: {
+            $sum: {
+              $cond: [
+                { $in: ["$orderStatus", ["COMPLETED", "PARTIAL"]] },
+                "$seller.commissionSalary",
+                0,
+              ],
+            },
+          },
+        },
+      },
+      { $sort: { totalOrders: -1 } },
+    ])
     : Promise.resolve(undefined);
 
   const myPerformancePromise = [
@@ -278,45 +278,45 @@ const getDashboardOverview = async (
     Role.TELESALES,
   ].includes(role as Role)
     ? Order.aggregate([
-        {
-          $match: {
-            seller: new Types.ObjectId(userId),
-            isDeleted: false,
-            isPublished: true,
-            ...queryObj,
+      {
+        $match: {
+          seller: new Types.ObjectId(userId),
+          isDeleted: false,
+          isPublished: true,
+          ...queryObj,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          pendingOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "PENDING"] }, 1, 0] },
+          },
+          confirmedOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "CONFIRMED"] }, 1, 0] },
+          },
+          completedOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "COMPLETED"] }, 1, 0] },
+          },
+          cancelledOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "CANCELLED"] }, 1, 0] },
+          },
+          partialOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "PARTIAL"] }, 1, 0] },
+          },
+          revenue: {
+            $sum: {
+              $cond: [
+                { $in: ["$orderStatus", ["COMPLETED", "PARTIAL"]] },
+                { $subtract: ["$total", { $ifNull: ["$shippingCost", 0] }] },
+                0,
+              ],
+            },
           },
         },
-        {
-          $group: {
-            _id: null,
-            totalOrders: { $sum: 1 },
-            pendingOrders: {
-              $sum: { $cond: [{ $eq: ["$orderStatus", "PENDING"] }, 1, 0] },
-            },
-            confirmedOrders: {
-              $sum: { $cond: [{ $eq: ["$orderStatus", "CONFIRMED"] }, 1, 0] },
-            },
-            completedOrders: {
-              $sum: { $cond: [{ $eq: ["$orderStatus", "COMPLETED"] }, 1, 0] },
-            },
-            cancelledOrders: {
-              $sum: { $cond: [{ $eq: ["$orderStatus", "CANCELLED"] }, 1, 0] },
-            },
-            partialOrders: {
-              $sum: { $cond: [{ $eq: ["$orderStatus", "PARTIAL"] }, 1, 0] },
-            },
-            revenue: {
-              $sum: {
-                $cond: [
-                  { $in: ["$orderStatus", ["COMPLETED", "PARTIAL"]] },
-                  { $subtract: ["$total", { $ifNull: ["$shippingCost", 0] }] },
-                  0,
-                ],
-              },
-            },
-          },
-        },
-      ])
+      },
+    ])
     : Promise.resolve(undefined);
 
   // ---- Batch 2: everything that depends on the final matchCondition, plus
@@ -325,6 +325,7 @@ const getDashboardOverview = async (
     totalOrders,
     orderStatsAgg,
     courierAssignedCount,
+    totalSentToCourierCount,
     inTransitCount,
     noResponseCount,
     revenueAgg,
@@ -345,6 +346,10 @@ const getDashboardOverview = async (
     Order.countDocuments({
       ...matchCondition,
       deliveryStatus: "COURIERASSIGNED",
+    }),
+    Order.countDocuments({
+      ...matchCondition,
+      deliveryStatus: { $exists: true, $nin: [null, ""] },
     }),
     Order.countDocuments({ ...matchCondition, deliveryStatus: "IN_TRANSIT" }),
     Order.countDocuments({ ...matchCondition, deliveryStatus: "NO_RESPONSE" }),
@@ -499,14 +504,14 @@ const getDashboardOverview = async (
     role as Role,
   )
     ? myPerformanceResult?.[0] || {
-        totalOrders: 0,
-        pendingOrders: 0,
-        confirmedOrders: 0,
-        completedOrders: 0,
-        cancelledOrders: 0,
-        partialOrders: 0,
-        revenue: 0,
-      }
+      totalOrders: 0,
+      pendingOrders: 0,
+      confirmedOrders: 0,
+      completedOrders: 0,
+      cancelledOrders: 0,
+      partialOrders: 0,
+      revenue: 0,
+    }
     : undefined;
 
   const orderStats = {
@@ -534,6 +539,7 @@ const getDashboardOverview = async (
     totalUsers,
     totalProducts,
     orderStats,
+    totalSentToCourier: totalSentToCourierCount,
     staffEarnings,
 
     staffPerformance,

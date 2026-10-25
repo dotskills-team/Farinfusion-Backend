@@ -18,6 +18,7 @@ import {
   returnSearchableFields,
 } from "./return.constant";
 import { OrderStatus } from "../order/order.interface";
+import { WrongAssignedProductServices } from "../wrongassignedproduct/wrongassignedproduct.service";
 
 const createReturn = async (
   payload: Partial<IReturnParcel>,
@@ -120,8 +121,6 @@ const createReturn = async (
         Number(item.quantity || 0),
       );
 
-      console.log("Product soludDeduction:", soldDeduction);
-
       if (item.shouldRestock && !item.isDamaged) {
         await Product.findByIdAndUpdate(
           item.product,
@@ -197,6 +196,14 @@ const createReturn = async (
     }
 
     const created = await ReturnParcel.create([payload], { session });
+
+    await WrongAssignedProductServices.markAsReceivedByReturn(
+      order._id,
+      created[0]._id,
+      payload.returnedProducts.map((item) => item.product),
+      user.userId,
+      session,
+    );
 
     order.returnCount = (order.returnCount || 0) + 1;
 
@@ -326,41 +333,41 @@ const getAllReturns = async (query: Record<string, string>) => {
 
   // Check searchTerm against Order customOrderId first
   // Check if searchTerm is an Order customOrderId
-let isOrderSearch = false;
+  let isOrderSearch = false;
 
-if (query.searchTerm?.trim()) {
-  const matchingOrder = await Order.findOne({
-    customOrderId: {
-      $regex: `^${query.searchTerm.trim()}$`,
-      $options: "i",
-    },
-  } as any).select("_id");
+  if (query.searchTerm?.trim()) {
+    const matchingOrder = await Order.findOne({
+      customOrderId: {
+        $regex: `^${query.searchTerm.trim()}$`,
+        $options: "i",
+      },
+    } as any).select("_id");
 
-  if (matchingOrder) {
-    isOrderSearch = true;
+    if (matchingOrder) {
+      isOrderSearch = true;
 
-    queryObj.order = matchingOrder._id;
+      queryObj.order = matchingOrder._id;
+    }
   }
-}
 
-const queryBuilder = new QueryBuilder(
-  ReturnParcel.find({
-    isDeleted: false,
-    ...queryObj,
-  }).populate(returnPopulateFields),
-  query,
-);
+  const queryBuilder = new QueryBuilder(
+    ReturnParcel.find({
+      isDeleted: false,
+      ...queryObj,
+    }).populate(returnPopulateFields),
+    query,
+  );
 
-const returnsData = queryBuilder.filter();
+  const returnsData = queryBuilder.filter();
 
-if (!isOrderSearch) {
-  returnsData.search(returnSearchableFields);
-}
+  if (!isOrderSearch) {
+    returnsData.search(returnSearchableFields);
+  }
 
-returnsData
-  .sort()
-  .fields()
-  .paginate();
+  returnsData
+    .sort()
+    .fields()
+    .paginate();
 
   const statsAgg = await ReturnParcel.aggregate([
     { $match: { isDeleted: false, ...queryObj } },
@@ -546,6 +553,8 @@ const deleteReturn = async (id: string) => {
 
     await result.save({ session });
     await order.save({ session });
+
+    await WrongAssignedProductServices.revertByReturn(result._id, session);
 
     await session.commitTransaction();
 

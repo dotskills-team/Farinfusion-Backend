@@ -384,6 +384,7 @@ const trackCourier = async (trackingCode: string) => {
 
     case "pickup cancel":
     case "cancelled":
+    case "paid return":
     case "return":
       mappedStatus = CourierDeliveryStatus.CANCELLED;
       break;

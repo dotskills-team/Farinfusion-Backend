@@ -45,7 +45,6 @@ export interface IFbAssignmentLog {
   note?: string;
 }
 
-// Message text save hoy na, shudhu kon moderator reply korlo seta (report + "ke pathalo" dekhar jonno)
 export interface IFbReplyLog {
   _id?: Types.ObjectId;
   conversation: Types.ObjectId;
