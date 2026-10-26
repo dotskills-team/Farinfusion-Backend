@@ -1011,6 +1011,107 @@ const markOrderDamage = async ({ orderId, itemIndex, quantity, note }: any) => {
   }
 };
 
+// version 1
+// const updateOrder = async (orderId: string, payload: any) => {
+//   const existingOrder =
+//     await Order.findById(orderId).populate("products.product");
+
+//   if (!existingOrder) {
+//     throw new AppError(httpStatus.NOT_FOUND, "Order not found");
+//   }
+
+//   // --- Stock/Sold reconciliation when products are being updated ---
+//   if (payload.products && payload.products.length > 0) {
+//     const existingProductMap = new Map<string, number>();
+
+//     // Build a map of productId -> quantity from the EXISTING order
+//     for (const item of existingOrder.products) {
+//       const productId =
+//         typeof item.product === "object"
+//           ? (item.product as any)._id.toString()
+//           : item.product;
+//       existingProductMap.set(
+//         productId,
+//         (existingProductMap.get(productId) || 0) + item.quantity,
+//       );
+//     }
+
+//     const newProductMap = new Map<string, number>();
+
+//     // Build a map of productId -> quantity from the NEW payload
+//     for (const item of payload.products) {
+//       const productId =
+//         typeof item.product === "object"
+//           ? (item.product._id?.toString() ?? item.product.toString())
+//           : item.product.toString();
+//       newProductMap.set(
+//         productId,
+//         (newProductMap.get(productId) || 0) + item.quantity,
+//       );
+//     }
+
+//     // Collect all unique product IDs across both old and new
+//     const allProductIds = new Set([
+//       ...existingProductMap.keys(),
+//       ...newProductMap.keys(),
+//     ]);
+
+//     await Promise.all(
+//       Array.from(allProductIds).map(async (productId) => {
+//         const oldQty = existingProductMap.get(productId) || 0;
+//         const newQty = newProductMap.get(productId) || 0;
+//         const diff = newQty - oldQty;
+
+//         if (diff === 0) return;
+
+//         const product = await Product.findById(productId);
+//         if (!product) return;
+
+//         product.totalSold = Math.max(0, (product.totalSold || 0) + diff);
+//         product.availableStock = Math.max(
+//           0,
+//           (product.availableStock || 0) - diff,
+//         );
+//         await product.save();
+//       }),
+//     );
+//   }
+
+//   let subtotal = 0;
+
+//   if (payload.products && payload.products.length > 0) {
+//     subtotal = payload.products.reduce(
+//       (sum: number, item: any) => sum + item.price * item.quantity,
+//       0,
+//     );
+//   }
+
+//   const shippingCost = payload.shippingCost ?? existingOrder.shippingCost ?? 0;
+//   const discount = payload.discount ?? existingOrder.discount ?? 0;
+//   let total = subtotal + shippingCost - discount;
+
+//   if (payload?.advanceDetails?.option && payload?.advanceDetails?.amount) {
+//     total = total - payload?.advanceDetails?.amount;
+//   }
+
+//   const updatedOrder = await Order.findByIdAndUpdate(
+//     orderId,
+//     { ...payload, total, subtotal },
+//     {
+//       returnDocument: "after",
+//       runValidators: true,
+//     },
+//   );
+
+//   if (!updatedOrder) {
+//     throw new AppError(httpStatus.NOT_FOUND, "Order update failed");
+//   }
+
+//   return updatedOrder;
+// };
+
+
+// version 2
 const updateOrder = async (orderId: string, payload: any) => {
   const existingOrder =
     await Order.findById(orderId).populate("products.product");
@@ -1019,16 +1120,18 @@ const updateOrder = async (orderId: string, payload: any) => {
     throw new AppError(httpStatus.NOT_FOUND, "Order not found");
   }
 
+  const hasNewProducts =
+    Array.isArray(payload.products) && payload.products.length > 0;
+
   // --- Stock/Sold reconciliation when products are being updated ---
-  if (payload.products && payload.products.length > 0) {
+  if (hasNewProducts) {
     const existingProductMap = new Map<string, number>();
 
-    // Build a map of productId -> quantity from the EXISTING order
     for (const item of existingOrder.products) {
       const productId =
         typeof item.product === "object"
           ? (item.product as any)._id.toString()
-          : item.product;
+          : String(item.product);
       existingProductMap.set(
         productId,
         (existingProductMap.get(productId) || 0) + item.quantity,
@@ -1037,7 +1140,6 @@ const updateOrder = async (orderId: string, payload: any) => {
 
     const newProductMap = new Map<string, number>();
 
-    // Build a map of productId -> quantity from the NEW payload
     for (const item of payload.products) {
       const productId =
         typeof item.product === "object"
@@ -1049,7 +1151,6 @@ const updateOrder = async (orderId: string, payload: any) => {
       );
     }
 
-    // Collect all unique product IDs across both old and new
     const allProductIds = new Set([
       ...existingProductMap.keys(),
       ...newProductMap.keys(),
@@ -1057,9 +1158,9 @@ const updateOrder = async (orderId: string, payload: any) => {
 
     await Promise.all(
       Array.from(allProductIds).map(async (productId) => {
-        const oldQty = existingProductMap.get(productId) || 0;
-        const newQty = newProductMap.get(productId) || 0;
-        const diff = newQty - oldQty;
+        const diff =
+          (newProductMap.get(productId) || 0) -
+          (existingProductMap.get(productId) || 0);
 
         if (diff === 0) return;
 
@@ -1076,26 +1177,36 @@ const updateOrder = async (orderId: string, payload: any) => {
     );
   }
 
-  let subtotal = 0;
+  // Use new products if provided, otherwise fall back to existing products
+  const productsForCalc: any[] = hasNewProducts
+    ? payload.products
+    : existingOrder.products;
 
-  if (payload.products && payload.products.length > 0) {
-    subtotal = payload.products.reduce(
-      (sum: number, item: any) => sum + item.price * item.quantity,
-      0,
-    );
-  }
+  const subtotal = productsForCalc.reduce(
+    (sum: number, item: any) =>
+      sum + (Number(item.price) || 0) * (Number(item.quantity) || 0),
+    0,
+  );
 
   const shippingCost = payload.shippingCost ?? existingOrder.shippingCost ?? 0;
   const discount = payload.discount ?? existingOrder.discount ?? 0;
-  let total = subtotal + shippingCost - discount;
 
-  if (payload?.advanceDetails?.option && payload?.advanceDetails?.amount) {
-    total = total - payload?.advanceDetails?.amount;
-  }
+  // Advance: use payload value if sent, otherwise keep the existing one
+  const advanceAmount =
+    payload.advanceDetails !== undefined
+      ? payload.advanceDetails?.option
+        ? Number(payload.advanceDetails?.amount) || 0
+        : 0
+      : Number(existingOrder.advanceDetails?.amount) || 0;
+
+  const total = subtotal + shippingCost - discount - advanceAmount;
+
+  // Never trust client-sent total/subtotal
+  const { total: _t, subtotal: _s, ...safePayload } = payload;
 
   const updatedOrder = await Order.findByIdAndUpdate(
     orderId,
-    { ...payload, total, subtotal },
+    { ...safePayload, total, subtotal },
     {
       returnDocument: "after",
       runValidators: true,
