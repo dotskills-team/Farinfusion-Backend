@@ -40,6 +40,7 @@ const userSchema = new Schema<IUser>(
         "orders-management",
         "leads",
         "pos",
+        "low-stock-products",
         "wrong-assigned-products",
       ],
       default: [],
