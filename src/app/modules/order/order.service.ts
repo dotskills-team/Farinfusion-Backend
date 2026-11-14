@@ -25,6 +25,7 @@ import { CouponServices } from "../coupon/coupon.service";
 import { JwtPayload } from "jsonwebtoken";
 import { reserveOrderProducts } from "./order.stock";
 import { deductReservedStock, restoreReservedStock } from "./order.inventory";
+import { allocateWaitingStockForProduct } from "./order.waiting";
 
 interface TCreateOrderPayload {
   orderType: OrderType;
@@ -255,29 +256,29 @@ const createOrder = async (payload: TCreateOrderPayload) => {
       customOrderIds.push(await getNextCustomOrderId(session));
     }
 
-if (payload.couponCode) {
-  const coupon = await Coupon.findOne({
-    code: payload.couponCode,
-    isDeleted: false,
-  }).session(session);
+    if (payload.couponCode) {
+      const coupon = await Coupon.findOne({
+        code: payload.couponCode,
+        isDeleted: false,
+      }).session(session);
 
-  if (!coupon) {
-    throw new AppError(
-      httpStatus.BAD_REQUEST,
-      "Invalid coupon",
-    );
-  }
+      if (!coupon) {
+        throw new AppError(
+          httpStatus.BAD_REQUEST,
+          "Invalid coupon",
+        );
+      }
 
-  await Coupon.findByIdAndUpdate(
-    coupon._id,
-    {
-      $inc: {
-        usedCount: 1,
-      },
-    },
-    { session },
-  );
-}
+      await Coupon.findByIdAndUpdate(
+        coupon._id,
+        {
+          $inc: {
+            usedCount: 1,
+          },
+        },
+        { session },
+      );
+    }
 
     // if (
     //   payload.advanceDetails?.amount &&
@@ -387,9 +388,9 @@ if (payload.couponCode) {
         advanceDetails:
           payload.advanceDetails?.option && advanceAmount > 0
             ? {
-                option: payload.advanceDetails.option,
-                amount: advanceAmount,
-              }
+              option: payload.advanceDetails.option,
+              amount: advanceAmount,
+            }
             : undefined,
 
         confirmedBy: null,
@@ -791,6 +792,18 @@ const updateOrderCancelStatus = async (
 
     const newOrderStatus = payload.orderStatus || previousStatus;
 
+    // Orders cancelled from out of stock (still have pending qty) cannot be restored
+    if (
+      previousStatus === "CANCELLED" &&
+      newOrderStatus !== "CANCELLED" &&
+      existingOrder.products.some((p: any) => (p.pendingQuantity ?? 0) > 0)
+    ) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        "Orders cancelled from out of stock cannot be restored",
+      );
+    }
+
     if (previousStatus !== "CANCELLED" && newOrderStatus === "CANCELLED") {
       if (!(existingOrder as any).isRestocked) {
         await restoreReservedStock(existingOrder, session);
@@ -837,6 +850,76 @@ const updateOrderCancelStatus = async (
     throw error;
   }
 };
+
+
+const cancelWaitingOrder = async (orderId: string) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const order = await Order.findById(orderId).session(session);
+
+    if (!order) {
+      throw new AppError(httpStatus.NOT_FOUND, "Order not found");
+    }
+
+    // Guards against double cancel and wrong-status cancel
+    if (order.orderStatus !== OrderStatus.WAITING_FOR_STOCK) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        "Only out of stock orders can be cancelled here",
+      );
+    }
+
+    // Products that held reserved stock (freed stock must be re-allocated later)
+    const affectedProductIds = Array.from(
+      new Set(
+        order.products
+          .filter((item) => (item.reservedQuantity ?? item.quantity) > 0)
+          .map((item) => String(item.product)),
+      ),
+    );
+
+    // Return only the reserved part to stock (pending part never took stock)
+    if (!order.isRestocked) {
+      await restoreReservedStock(order, session);
+      order.isRestocked = true;
+    }
+
+    order.orderStatus = OrderStatus.CANCELLED;
+    order.deliveryStatus = DeliveryStatus.CANCELLED;
+
+    if (!order.cancelledAt) {
+      order.cancelledAt = new Date();
+    }
+
+    // Save first so the allocation query no longer sees this order as waiting
+    await order.save({ session });
+
+    // Give freed stock to other waiting orders (oldest first)
+    for (const productId of affectedProductIds) {
+      await allocateWaitingStockForProduct(
+        new Types.ObjectId(productId),
+        session,
+      );
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return await Order.findById(orderId)
+      .populate("customer", "name email _id role phone")
+      .populate("seller", "name email _id role phone")
+      .populate("payment")
+      .populate("products.product");
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
+};
+
 
 const updateOrderStatus = async (
   orderId: string,
@@ -1011,107 +1094,7 @@ const markOrderDamage = async ({ orderId, itemIndex, quantity, note }: any) => {
   }
 };
 
-// version 1
-// const updateOrder = async (orderId: string, payload: any) => {
-//   const existingOrder =
-//     await Order.findById(orderId).populate("products.product");
 
-//   if (!existingOrder) {
-//     throw new AppError(httpStatus.NOT_FOUND, "Order not found");
-//   }
-
-//   // --- Stock/Sold reconciliation when products are being updated ---
-//   if (payload.products && payload.products.length > 0) {
-//     const existingProductMap = new Map<string, number>();
-
-//     // Build a map of productId -> quantity from the EXISTING order
-//     for (const item of existingOrder.products) {
-//       const productId =
-//         typeof item.product === "object"
-//           ? (item.product as any)._id.toString()
-//           : item.product;
-//       existingProductMap.set(
-//         productId,
-//         (existingProductMap.get(productId) || 0) + item.quantity,
-//       );
-//     }
-
-//     const newProductMap = new Map<string, number>();
-
-//     // Build a map of productId -> quantity from the NEW payload
-//     for (const item of payload.products) {
-//       const productId =
-//         typeof item.product === "object"
-//           ? (item.product._id?.toString() ?? item.product.toString())
-//           : item.product.toString();
-//       newProductMap.set(
-//         productId,
-//         (newProductMap.get(productId) || 0) + item.quantity,
-//       );
-//     }
-
-//     // Collect all unique product IDs across both old and new
-//     const allProductIds = new Set([
-//       ...existingProductMap.keys(),
-//       ...newProductMap.keys(),
-//     ]);
-
-//     await Promise.all(
-//       Array.from(allProductIds).map(async (productId) => {
-//         const oldQty = existingProductMap.get(productId) || 0;
-//         const newQty = newProductMap.get(productId) || 0;
-//         const diff = newQty - oldQty;
-
-//         if (diff === 0) return;
-
-//         const product = await Product.findById(productId);
-//         if (!product) return;
-
-//         product.totalSold = Math.max(0, (product.totalSold || 0) + diff);
-//         product.availableStock = Math.max(
-//           0,
-//           (product.availableStock || 0) - diff,
-//         );
-//         await product.save();
-//       }),
-//     );
-//   }
-
-//   let subtotal = 0;
-
-//   if (payload.products && payload.products.length > 0) {
-//     subtotal = payload.products.reduce(
-//       (sum: number, item: any) => sum + item.price * item.quantity,
-//       0,
-//     );
-//   }
-
-//   const shippingCost = payload.shippingCost ?? existingOrder.shippingCost ?? 0;
-//   const discount = payload.discount ?? existingOrder.discount ?? 0;
-//   let total = subtotal + shippingCost - discount;
-
-//   if (payload?.advanceDetails?.option && payload?.advanceDetails?.amount) {
-//     total = total - payload?.advanceDetails?.amount;
-//   }
-
-//   const updatedOrder = await Order.findByIdAndUpdate(
-//     orderId,
-//     { ...payload, total, subtotal },
-//     {
-//       returnDocument: "after",
-//       runValidators: true,
-//     },
-//   );
-
-//   if (!updatedOrder) {
-//     throw new AppError(httpStatus.NOT_FOUND, "Order update failed");
-//   }
-
-//   return updatedOrder;
-// };
-
-
-// version 2
 const updateOrder = async (orderId: string, payload: any) => {
   const existingOrder =
     await Order.findById(orderId).populate("products.product");
@@ -1956,6 +1939,7 @@ export const OrderServices = {
   getMyOrders,
   restoreNoResponseOrder,
   updateOrderCancelStatus,
+  cancelWaitingOrder,
   getAllHoldOrders,
   getMyHoldOrders,
 };

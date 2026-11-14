@@ -150,6 +150,12 @@ router.patch(
   OrderControllers.updateOrderCancelStatus,
 );
 
+router.patch(
+  "/:id/cancel-waiting",
+  checkAuth(Role.ADMIN, Role.MANAGER, Role.TELESALES),
+  OrderControllers.cancelWaitingOrder,
+);
+
 router.post("/exchange", OrderControllers.exchangeOrderItem);
 
 router.post("/damage", OrderControllers.markOrderDamage);

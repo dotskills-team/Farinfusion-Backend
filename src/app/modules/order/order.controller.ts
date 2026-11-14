@@ -100,6 +100,19 @@ const updateOrderCancelStatus = catchAsync(
   },
 );
 
+const cancelWaitingOrder = catchAsync(async (req: Request, res: Response) => {
+  const result = await OrderServices.cancelWaitingOrder(
+    req.params.id as string,
+  );
+
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Out of stock order cancelled successfully",
+    data: result,
+  });
+});
+
 const updateOrderStatus = catchAsync(async (req: Request, res: Response) => {
   const orderId = req.params.id;
   const { orderStatus } = req.body;
@@ -489,6 +502,7 @@ export const OrderControllers = {
   deleteOrder,
   getCustomerOrder,
   updateOrderCancelStatus,
+  cancelWaitingOrder,
   updateOrderStatus,
   partialUpdateOrder,
   markNoResponse,
